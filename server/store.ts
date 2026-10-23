@@ -34,6 +34,9 @@ export interface KnownAgent {
   title: string | null;
   parentId: string | null;
   workspaceId: string | null;
+  /** Display names, resolved once and kept so archived agents still show them. */
+  projectName: string | null;
+  workspaceName: string | null;
   /** Created with PASEO_WARDER=off. */
   optOut: boolean;
 }
@@ -127,11 +130,13 @@ export class Store {
   }
 
   upsertAgent(id: string, patch: Partial<KnownAgent>): KnownAgent {
-    const cur = this.state.agents[id] ?? { title: null, parentId: null, workspaceId: null, optOut: false };
+    const cur = this.state.agents[id] ?? { title: null, parentId: null, workspaceId: null, projectName: null, workspaceName: null, optOut: false };
     const next: KnownAgent = {
       title: patch.title ?? cur.title,
       parentId: patch.parentId ?? cur.parentId,
       workspaceId: patch.workspaceId ?? cur.workspaceId,
+      projectName: patch.projectName ?? cur.projectName ?? null,
+      workspaceName: patch.workspaceName ?? cur.workspaceName ?? null,
       optOut: patch.optOut ?? cur.optOut,
     };
     this.state.agents[id] = next;

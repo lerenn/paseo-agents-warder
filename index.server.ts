@@ -146,8 +146,36 @@ export default function contribute(server: PluginServerContext) {
   };
   timer = setTimeout(loop, 15_000);
 
-  server.handle(listTasksRpc, (_input, ctx) => {
+  // Project and workspace names come from the workspace directory; looked up once per agent and kept.
+  let namesCheckedAt = 0;
+  async function resolveNames(ctx: { paseo: Paseo }) {
+    const missing = store.all().filter((t) => {
+      const a = store.agent(t.agentId);
+      return a?.workspaceId && !(a.projectName && a.workspaceName);
+    });
+    if (missing.length === 0 || Date.now() - namesCheckedAt < 30_000) return;
+    namesCheckedAt = Date.now();
+    try {
+      const { entries } = await ctx.paseo.workspaces.list();
+      const byId = new Map(entries.map((w) => [w.id, w]));
+      for (const task of missing) {
+        const agent = store.agent(task.agentId);
+        const ws = agent?.workspaceId ? byId.get(agent.workspaceId) : undefined;
+        if (ws) {
+          store.upsertAgent(task.agentId, {
+            projectName: ws.projectCustomName || ws.projectDisplayName,
+            workspaceName: ws.title || ws.name,
+          });
+        }
+      }
+    } catch (error) {
+      console.error("warder: workspace lookup failed", error);
+    }
+  }
+
+  server.handle(listTasksRpc, async (_input, ctx) => {
     capture(ctx);
+    await resolveNames(ctx);
     return { now: Date.now(), tasks: engine.views(), settings: current, settingsError, endpoint: { url, error: startError } };
   });
   server.handle(cancelTaskRpc, ({ taskId }, ctx) => {
