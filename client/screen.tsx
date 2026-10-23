@@ -85,7 +85,7 @@ export function WarderScreen({ theme, layout }: PluginScreenProps) {
           <Text style={s.muted}>At most one prompt every {settings.globalGapSeconds} s across agents</Text>
           <Text style={s.muted}>Backoff x{settings.backoffFactor} up to {settings.maxBackoffIntervals} intervals; parent notified after {settings.notifyParentAfterPings} unanswered pings; give up after {settings.maxUnansweredPings}</Text>
           <Text style={s.muted}>Announced-work detection: {settings.announcedWork.enabled ? `on (every ${settings.announcedWork.intervalMinutes} min)` : "off"}</Text>
-          <Text style={s.muted}>Edit these under Settings → Plugins → Agents warder.</Text>
+          <Text style={s.muted}>Edit these under Settings → Plugins → Agents Warder.</Text>
         </View>
       ) : null}
     </ScrollView>

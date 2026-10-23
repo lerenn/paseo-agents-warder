@@ -1,4 +1,4 @@
-Agents warder keeps long-running agents from going quiet without anyone noticing. An agent (or its parent) registers a task: what is being done or waited for, and how often to check. If the agent shows no timeline activity for that long, Warder prompts it to continue or close the task. If it stays unresponsive, Warder tells the parent agent.
+Agents Warder keeps long-running agents from going quiet without anyone noticing. An agent (or its parent) registers a task: what is being done or waited for, and how often to check. If the agent shows no timeline activity for that long, Warder prompts it to continue or close the task. If it stays unresponsive, Warder tells the parent agent.
 
 ## How it works
 
@@ -29,7 +29,7 @@ By default every new agent gets the tools. Create an agent with `PASEO_WARDER=of
 
 ## Screen
 
-The Agents warder screen under the sidebar lists tasks with agent, interval, last activity, pings sent and status (ok, pinged, escalated, waiting-permission, done, expired, archived, gave-up), and lets you stop one.
+The Agents Warder screen under the sidebar lists tasks with agent, interval, last activity, pings sent and status (ok, pinged, escalated, waiting-permission, done, expired, archived, gave-up), and lets you stop one.
 
 ## Data
 
