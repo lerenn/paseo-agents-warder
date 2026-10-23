@@ -10,6 +10,22 @@ interface RpcRequest {
   params?: any;
 }
 
+/** Shown to agents through the MCP `instructions` field of the initialize result. */
+export const INSTRUCTIONS = `Warder watches your long-running work and prompts you if you go quiet.
+
+When to use it: before you start something that takes a while or that you wait on (a build, CI, a deploy, a review, a subagent), call warder_register(task, interval_minutes). The task says what you are doing or waiting for; the interval is how long you may stay silent before Warder checks on you. Use until (ISO 8601) if the task has a natural deadline.
+
+Tools:
+- warder_register: register a task for yourself. Returns task_id.
+- warder_update(task_id, note): record progress. Counts as activity and restarts the timer.
+- warder_done(task_id, result): finish the task. Always call it when the work is done or abandoned, so you stop being prompted.
+- warder_list: list your active tasks.
+- warder_register_subagent(agent_id, task, interval_minutes): if you manage subagents, guard one of them; you are notified if it stays unresponsive.
+
+A message starting with "Warder:" is an inactivity ping: your task had no activity for its interval. Reply by continuing the task, or call warder_update with where you are, or warder_done if it is finished. If you ignore several pings, your parent agent is notified.
+
+Rules: keep one task per piece of work, pick an interval longer than your longest normal silent step, and do not register tasks for work you are actively doing in short turns.`;
+
 /** Minimal MCP server over streamable HTTP (JSON responses, no streaming, no sessions). */
 export class McpServer {
   constructor(
@@ -34,6 +50,7 @@ export class McpServer {
           protocolVersion: SUPPORTED_VERSIONS.includes(asked) ? asked : SUPPORTED_VERSIONS[0],
           capabilities: { tools: {} },
           serverInfo: { name: "warder", version: this.version },
+          instructions: INSTRUCTIONS,
         });
       }
       case "ping":

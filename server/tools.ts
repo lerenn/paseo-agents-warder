@@ -53,7 +53,7 @@ export const TOOLS: ToolDef[] = [
     name: "warder_register",
     description:
       "Register a task you are working on or waiting for (a long build, a CI run, a subagent, a review). Warder will prompt you if " +
-      "you show no activity for interval_minutes, and tell your parent agent if you stay silent. Call warder_done when finished.",
+      "you show no activity for interval_minutes, and tell your parent agent if you stay silent. Returns task_id. Call warder_done when finished.",
     input: z.object({
       task: z.string().min(1).max(500).describe("What you are doing or waiting for."),
       interval_minutes: interval,
