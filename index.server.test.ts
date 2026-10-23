@@ -16,6 +16,11 @@ function boot(settings: object = {}) {
   const handlers: Record<string, any> = {};
   const sent: { id: string; text: string }[] = [];
   const paseo = {
+    workspaces: {
+      list: async () => ({
+        entries: [{ id: "w", projectDisplayName: "Proj", projectCustomName: null, name: "ws-branch", title: "Nice workspace" }],
+      }),
+    },
     agents: {
       ref: (id: string) => ({
         send: async (text: string) => void sent.push({ id, text }),
@@ -66,5 +71,14 @@ describe("plugin entry", () => {
     const agent = { id: "a2", workspaceId: "w", parentAgentId: null, title: "T" };
     handlers["agent.turn_ended"]({ agent, turnId: "1", outcome: { kind: "completed" }, timeline: [{ type: "assistant_message", text: "I'll keep watching CI." }] }, ctx);
     expect((await handlers["warder.list"]({}, ctx)).tasks).toEqual([]);
+  });
+
+  it("lists project, workspace and conversation names with each task", async () => {
+    const { handlers, ctx } = boot({ announcedWork: { enabled: true, intervalMinutes: 5 } });
+    await handlers["agent.create"](request(), ctx);
+    const agent = { id: "a3", workspaceId: "w", parentAgentId: null, title: "My conversation" };
+    handlers["agent.turn_ended"]({ agent, turnId: "1", outcome: { kind: "completed" }, timeline: [{ type: "assistant_message", text: "I'll keep watching CI." }] }, ctx);
+    const [task] = (await handlers["warder.list"]({}, ctx)).tasks;
+    expect(task).toMatchObject({ agentId: "a3", agentTitle: "My conversation", projectName: "Proj", workspaceName: "Nice workspace", workspaceId: "w" });
   });
 });

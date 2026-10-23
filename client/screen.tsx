@@ -89,7 +89,15 @@ export function WarderScreen({ theme, layout }: PluginScreenProps) {
         <StatusBadge status={t.status} styles={s} colors={theme.colors} />
       </View>
       <Text style={s.muted}>
-        {t.agentTitle ?? t.agentId} · every {t.intervalMinutes} min · last activity {ago(data!.now, t.lastActivityAt)}
+        {[t.projectName, t.workspaceName].filter(Boolean).join(" › ") || "Unknown workspace"}
+        {" · "}
+        {t.agentTitle ?? "Untitled conversation"}
+      </Text>
+      <Text style={s.muted} selectable>
+        Agent {t.agentId}
+      </Text>
+      <Text style={s.muted}>
+        every {t.intervalMinutes} min · last activity {ago(data!.now, t.lastActivityAt)}
       </Text>
       <Text style={s.muted}>
         {t.pings} pings sent ({t.unanswered} unanswered) · registered by {t.registeredBy === t.agentId ? "the agent" : t.registeredBy} ({t.source})
