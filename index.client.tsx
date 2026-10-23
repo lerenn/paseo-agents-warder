@@ -13,7 +13,7 @@ function WarderItem({ currentScreen, openScreen }: PluginSidebarItemProps) {
 }
 
 export default function contribute(client: PluginClientContext) {
-  client.addScreen({ id: "warder", title: "Agents warder", Component: WarderScreen });
-  client.addSidebarHeaderItem({ id: "warder", title: "Agents warder", Component: WarderItem });
+  client.addScreen({ id: "warder", title: "Agents Warder", Component: WarderScreen });
+  client.addSidebarHeaderItem({ id: "warder", title: "Agents Warder", Component: WarderItem });
   return () => {};
 }

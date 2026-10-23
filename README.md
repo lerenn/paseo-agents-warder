@@ -11,7 +11,7 @@ Registry id: `lerenn/agents-warder`.
 - `server/tools.ts`, `server/mcp.ts`, `server/http.ts`: the MCP tools and the loopback endpoint.
 - `server/store.ts`: persisted tasks, agents and capability tokens.
 - `server/classify.ts`: optional announced-work detection.
-- `client/screen.tsx`: the Agents warder screen.
+- `client/screen.tsx`: the Agents Warder screen.
 
 ## Develop
 
