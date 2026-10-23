@@ -29,6 +29,14 @@ describe("mcp", () => {
     expect(reply.result.tools[0].inputSchema.required).toEqual(["task", "interval_minutes"]);
   });
 
+  it("sends usage instructions in the initialize result", async () => {
+    const { mcp, engine } = setup();
+    const reply: any = await mcp.handle({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18" } }, { engine, callerId: "x" });
+    expect(reply.result.instructions).toMatch(/warder_register/);
+    expect(reply.result.instructions).toMatch(/warder_done/);
+    expect(reply.result.instructions).toMatch(/"Warder:"/);
+  });
+
   it("answers notifications with nothing", async () => {
     const { mcp, engine } = setup();
     expect(await mcp.handle({ jsonrpc: "2.0", method: "notifications/initialized" }, { engine, callerId: "x" })).toBeNull();
