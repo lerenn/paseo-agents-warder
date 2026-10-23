@@ -13,7 +13,7 @@ interface RpcRequest {
 /** Shown to agents through the MCP `instructions` field of the initialize result. */
 export const INSTRUCTIONS = `Warder watches your long-running work and prompts you if you go quiet.
 
-When to use it: before you start something that takes a while or that you wait on (a build, CI, a deploy, a review, a subagent), call warder_register(task, interval_minutes). The task says what you are doing or waiting for; the interval is how long you may stay silent before Warder checks on you. Use until (ISO 8601) if the task has a natural deadline.
+When to use it: before you start something that takes a while or that you wait on (a build, CI, a deploy, a review, a subagent), call warder_register(task, interval_minutes). The task says what you are doing or waiting for; the interval is how long you may stay silent before Warder checks on you (you can omit it if you were created with a default interval; an explicit one overrides it). Use until (ISO 8601) if the task has a natural deadline.
 
 Tools:
 - warder_register: register a task for yourself. Returns task_id.

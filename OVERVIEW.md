@@ -18,6 +18,8 @@ Warder never sends more than one prompt per few seconds across all agents, howev
 
 Warder runs a small HTTP endpoint on `127.0.0.1:47822` that agents' MCP clients connect to; set `WARDER_PORT` on the daemon to change the port. Agents created before Warder was installed do not have the tools. Requires Paseo 0.11.2 or later.
 
+Create an agent with `PASEO_WARDER_INTERVAL` (for example `15m`, `1h30m`, or `900` for seconds) to give it a default check interval. Its `warder_register` calls can then omit `interval_minutes`, and an explicit value still overrides it. A parent guarding that agent with `warder_register_subagent` also gets the agent's default when it omits the interval. Values are rounded up to whole minutes, between 1 minute and 24 hours; an invalid value fails agent creation. Without a default, `interval_minutes` is required.
+
 By default every new agent gets the tools. Create an agent with `PASEO_WARDER=off` to opt it out; its subagents are then never pinged either. With scope `opt-in`, only agents created with `PASEO_WARDER=on` get the tools.
 
 ## Settings

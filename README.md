@@ -22,4 +22,4 @@ npm run typecheck && npm test && npm run build
 
 CI runs the same through Dagger (`dagger call all`).
 
-Environment: `WARDER_PORT` (endpoint port), `WARDER_STATE` (state file, mainly for tests), `PASEO_WARDER=off|on` (per-agent, at creation).
+Environment: `WARDER_PORT` (endpoint port), `WARDER_STATE` (state file, mainly for tests), `PASEO_WARDER=off|on` and `PASEO_WARDER_INTERVAL` (default check interval, e.g. `15m`; per-agent, at creation).

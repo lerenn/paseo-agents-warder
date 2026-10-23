@@ -4,6 +4,7 @@ import { warderSettings, type WarderSettings } from "./shared/settings";
 import { analyze, lastAssistantText } from "./server/classify";
 import { Engine, type Actions } from "./server/engine";
 import { WarderHttp } from "./server/http";
+import { INTERVAL_ENV, parseInterval } from "./server/interval";
 import { applyInjection, CAPABILITY_ENV, scopeApplies, SCOPE_ENV } from "./server/inject";
 import { McpServer } from "./server/mcp";
 import { Store } from "./server/store";
@@ -81,6 +82,8 @@ export default function contribute(server: PluginServerContext) {
     server.before("agent.create", async ({ request }, ctx) => {
       capture(ctx);
       await ready;
+      // A bad interval fails creation loudly instead of silently dropping the default.
+      if (request.env?.[INTERVAL_ENV]) parseInterval(request.env[INTERVAL_ENV]);
       if (!current?.enabled || !scopeApplies(current.scope, request.env)) return;
       await started;
       if (!url) throw new Error(`${startError} Create the agent with ${SCOPE_ENV}=off to skip warder.`);
@@ -90,7 +93,14 @@ export default function contribute(server: PluginServerContext) {
       capture(ctx);
       const capability = request.env[CAPABILITY_ENV];
       if (capability) store.bind(capability, request.agentId);
-      store.upsertAgent(request.agentId, { optOut: request.env[SCOPE_ENV]?.toLowerCase() === "off" });
+      const interval = request.env[INTERVAL_ENV];
+      let defaultIntervalMinutes: number | undefined;
+      try {
+        defaultIntervalMinutes = interval ? parseInterval(interval) : undefined;
+      } catch (error) {
+        console.error(`warder: ${(error as Error).message}`);
+      }
+      store.upsertAgent(request.agentId, { optOut: request.env[SCOPE_ENV]?.toLowerCase() === "off", defaultIntervalMinutes });
     }),
     server.on("agent.created", ({ agent }, ctx) => {
       capture(ctx);

@@ -17,7 +17,19 @@ export interface ToolDef {
 
 export class UsageError extends Error {}
 
-const interval = z.number().min(1).max(24 * 60).describe("How often warder should check on the task, in minutes (1 to 1440).");
+const interval = z
+  .number()
+  .min(1)
+  .max(24 * 60)
+  .optional()
+  .describe("How often warder should check on the task, in minutes (1 to 1440). Optional when the agent was created with a default interval.");
+
+/** The explicit interval, else the agent's creation-time default, else a clear error. */
+function intervalFor(explicit: number | undefined, agentId: string, ctx: ToolContext): number {
+  const value = explicit ?? ctx.engine.store.agent(agentId)?.defaultIntervalMinutes ?? undefined;
+  if (value === undefined) throw new UsageError("interval_minutes is required: this agent has no default interval (PASEO_WARDER_INTERVAL).");
+  return value;
+}
 const until = z
   .string()
   .optional()
@@ -63,7 +75,7 @@ export const TOOLS: ToolDef[] = [
       const t = ctx.engine.register({
         agentId: ctx.callerId,
         task,
-        intervalMinutes: interval_minutes,
+        intervalMinutes: intervalFor(interval_minutes, ctx.callerId, ctx),
         until: parseUntil(u),
         registeredBy: ctx.callerId,
         source: "agent",
@@ -91,7 +103,7 @@ export const TOOLS: ToolDef[] = [
       const t = ctx.engine.register({
         agentId: agent_id,
         task,
-        intervalMinutes: interval_minutes,
+        intervalMinutes: intervalFor(interval_minutes, agent_id, ctx),
         until: parseUntil(u),
         registeredBy: ctx.callerId,
         source: "parent",

@@ -26,7 +26,7 @@ describe("mcp", () => {
     const reply: any = await mcp.handle({ jsonrpc: "2.0", id: 1, method: "tools/list" }, { engine, callerId: "x" });
     const names = reply.result.tools.map((t: any) => t.name);
     expect(names).toEqual(["warder_register", "warder_register_subagent", "warder_update", "warder_done", "warder_list"]);
-    expect(reply.result.tools[0].inputSchema.required).toEqual(["task", "interval_minutes"]);
+    expect(reply.result.tools[0].inputSchema.required).toEqual(["task"]);
   });
 
   it("sends usage instructions in the initialize result", async () => {
@@ -54,6 +54,22 @@ describe("tools", () => {
     const done = await call("worker", "warder_done", { task_id: reg.json.task_id, result: "built" });
     expect(done.json.status).toBe("done");
     expect((await call("worker", "warder_update", { task_id: reg.json.task_id, note: "x" })).error).toBe(true);
+  });
+
+  it("uses the creation-time default interval, and an explicit one overrides it", async () => {
+    const { call, store } = setup();
+    store.upsertAgent("worker", { defaultIntervalMinutes: 15 });
+    expect((await call("worker", "warder_register", { task: "a" })).json.interval_minutes).toBe(15);
+    expect((await call("worker", "warder_register", { task: "b", interval_minutes: 3 })).json.interval_minutes).toBe(3);
+    // a parent guarding the subagent without an interval gets the subagent's default
+    expect((await call("boss", "warder_register_subagent", { agent_id: "worker", task: "c" })).json.interval_minutes).toBe(15);
+  });
+
+  it("asks for an interval when there is no default", async () => {
+    const { call } = setup();
+    const r = await call("worker", "warder_register", { task: "a" });
+    expect(r.error).toBe(true);
+    expect(r.text).toMatch(/PASEO_WARDER_INTERVAL/);
   });
 
   it("rejects bad input", async () => {
