@@ -11,7 +11,44 @@ function ago(now: number, at: number | null): string {
   return min < 1 ? "just now" : min < 90 ? `${min} min ago` : `${Math.round(min / 60)} h ago`;
 }
 
+type Colors = PluginScreenProps["theme"]["colors"];
+
+/** Badge color per status, taken from the theme so it works in every theme. */
+function badgeColor(status: TaskStatus, c: Colors): string {
+  switch (status) {
+    case "ok":
+      return c.statusSuccess;
+    case "pinged":
+      return c.statusWarning;
+    case "escalated":
+    case "gave-up":
+      return c.statusDanger;
+    case "waiting-permission":
+      return c.accent;
+    case "done":
+      return c.statusSuccess;
+    default:
+      return c.foregroundMuted;
+  }
+}
+
+/** Soft tinted background for a #rrggbb color; other formats fall back to no fill. */
+function tint(color: string, alpha: string): string | undefined {
+  return /^#[0-9a-f]{6}$/i.test(color) ? `${color}${alpha}` : undefined;
+}
+
 const ACTIVE: TaskStatus[] = ["ok", "pinged", "escalated", "waiting-permission"];
+
+function StatusBadge({ status, styles, colors }: { status: TaskStatus; styles: any; colors: Colors }) {
+  const color = badgeColor(status, colors);
+  const fill = tint(color, "26");
+  return (
+    <View accessibilityLabel={`Status: ${status}`} style={[styles.badge, { borderColor: tint(color, "66") ?? color }, fill ? { backgroundColor: fill } : null]}>
+      <View style={[styles.dot, { backgroundColor: color }]} />
+      <Text style={[styles.badgeText, { color }]}>{status}</Text>
+    </View>
+  );
+}
 
 export function WarderScreen({ theme, layout }: PluginScreenProps) {
   const list = useRpc(listTasksRpc);
@@ -34,6 +71,9 @@ export function WarderScreen({ theme, layout }: PluginScreenProps) {
       text: { color: color.foreground, fontSize: 14 },
       card: { padding: 12, gap: 4, borderRadius: 10, borderWidth: 1, borderColor: color.border, backgroundColor: color.surface1 },
       row: { flexDirection: "row" as const, justifyContent: "space-between" as const, gap: 8 },
+      badge: { flexDirection: "row" as const, alignItems: "center" as const, gap: 6, paddingVertical: 2, paddingHorizontal: 10, borderRadius: 999, borderWidth: 1, alignSelf: "flex-start" as const },
+      dot: { width: 7, height: 7, borderRadius: 4 },
+      badgeText: { fontSize: 12, fontWeight: "600" as const },
       button: { paddingVertical: 4, paddingHorizontal: 10, borderRadius: 8, borderWidth: 1, borderColor: color.border },
     };
   }, [theme, layout.compact]);
@@ -46,7 +86,7 @@ export function WarderScreen({ theme, layout }: PluginScreenProps) {
     <View key={t.id} style={s.card}>
       <View style={s.row}>
         <Text style={[s.text, { flex: 1 }]}>{t.task}</Text>
-        <Text style={s.text}>{t.status}</Text>
+        <StatusBadge status={t.status} styles={s} colors={theme.colors} />
       </View>
       <Text style={s.muted}>
         {t.agentTitle ?? t.agentId} · every {t.intervalMinutes} min · last activity {ago(data!.now, t.lastActivityAt)}
