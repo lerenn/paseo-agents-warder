@@ -1,6 +1,6 @@
 import { useRpc, type PluginScreenProps } from "@getpaseo/plugin/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { cancelTaskRpc, listTasksRpc } from "../shared/rpc";
 import type { TaskStatus, TaskView } from "../shared/task";
@@ -50,6 +50,22 @@ function StatusBadge({ status, styles, colors }: { status: TaskStatus; styles: a
   );
 }
 
+/** Chevron header that shows its children only while open; closed by default. */
+function Collapsible({ title, summary, styles, children }: { title: string; summary?: string; styles: any; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <View style={{ gap: 8 }}>
+      <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} accessibilityLabel={title} onPress={() => setOpen((v) => !v)}>
+        <Text style={styles.h}>
+          {open ? "▾" : "▸"} {title}
+          {summary ? ` · ${summary}` : ""}
+        </Text>
+      </Pressable>
+      {open ? children : null}
+    </View>
+  );
+}
+
 export function WarderScreen({ theme, layout }: PluginScreenProps) {
   const list = useRpc(listTasksRpc);
   const cancel = useRpc(cancelTaskRpc);
@@ -80,6 +96,7 @@ export function WarderScreen({ theme, layout }: PluginScreenProps) {
 
   const data = query.data;
   const tasks = [...(data?.tasks ?? [])].sort((a, b) => Number(ACTIVE.includes(b.status)) - Number(ACTIVE.includes(a.status)) || b.lastActivityAt - a.lastActivityAt);
+  const finished = tasks.filter((t) => !ACTIVE.includes(t.status));
   const settings = data?.settings;
 
   const renderTask = (t: TaskView) => (
@@ -124,8 +141,13 @@ export function WarderScreen({ theme, layout }: PluginScreenProps) {
       {data && tasks.length === 0 ? (
         <Text style={s.muted}>No tasks yet. Agents register them with warder_register; a parent can use warder_register_subagent.</Text>
       ) : null}
-      {tasks.map(renderTask)}
-      <Text style={s.h}>Settings</Text>
+      {tasks.filter((t) => ACTIVE.includes(t.status)).map(renderTask)}
+      {finished.length > 0 ? (
+        <Collapsible title="Finished tasks" summary={`${finished.length}`} styles={s}>
+          {finished.map(renderTask)}
+        </Collapsible>
+      ) : null}
+      <Collapsible title="Settings" summary={settings ? (settings.scope === "all" ? "all agents" : "opt-in") : undefined} styles={s}>
       {data?.settingsError ? <Text style={s.text}>Invalid settings: {data.settingsError}</Text> : null}
       {settings ? (
         <View style={s.card}>
@@ -136,6 +158,7 @@ export function WarderScreen({ theme, layout }: PluginScreenProps) {
           <Text style={s.muted}>Edit these under Settings → Plugins → Agents Warder.</Text>
         </View>
       ) : null}
+      </Collapsible>
     </ScrollView>
   );
 }
