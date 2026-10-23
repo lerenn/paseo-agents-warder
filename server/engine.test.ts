@@ -208,3 +208,86 @@ describe("skips", () => {
     expect(sent).toEqual([]);
   });
 });
+
+describe("idle agents", () => {
+  const SEC = 1000;
+
+  it("never pings an agent whose turn is running, until the interval backstop", async () => {
+    const { engine, sent, advance } = setup();
+    register(engine);
+    engine.turnStarted("a");
+    advance(9 * MIN);
+    await engine.tick();
+    expect(sent).toEqual([]);
+    advance(2 * MIN);
+    await engine.tick();
+    expect(sent).toHaveLength(1);
+    expect(sent[0].text).toContain("no activity");
+  });
+
+  it("pings an idle agent after the grace period with the idle wording", async () => {
+    const { engine, sent, advance } = setup();
+    register(engine);
+    engine.turnStarted("a");
+    engine.turnEnded("a");
+    advance(30 * SEC);
+    await engine.tick();
+    expect(sent).toEqual([]);
+    advance(31 * SEC);
+    await engine.tick();
+    expect(sent).toHaveLength(1);
+    expect(sent[0].text).toContain("Keep working within your turn");
+    expect(sent[0].text).toContain("wait for CI");
+  });
+
+  it("does not re-ping the same idle episode before the backoff, and gives up at the limit", async () => {
+    const { engine, sent, advance } = setup({ maxUnansweredPings: 2, notifyParentAfterPings: 99 });
+    register(engine);
+    engine.turnEnded("a");
+    advance(61 * SEC);
+    await engine.tick();
+    advance(5 * MIN);
+    await engine.tick();
+    expect(sent).toHaveLength(1);
+    advance(16 * MIN);
+    await engine.tick();
+    expect(sent).toHaveLength(2);
+    advance(120 * MIN);
+    await engine.tick();
+    expect(sent).toHaveLength(2);
+  });
+
+  it("a new turn ends the idle episode", async () => {
+    const { engine, sent, advance } = setup();
+    register(engine);
+    engine.turnEnded("a");
+    advance(61 * SEC);
+    engine.turnStarted("a");
+    advance(5 * MIN);
+    await engine.tick();
+    expect(sent).toEqual([]);
+  });
+
+  it("skips idle agents waiting on a permission and shows it", async () => {
+    const { engine, sent, advance } = setup();
+    const task = register(engine);
+    engine.turnEnded("a");
+    engine.permission("a", true);
+    advance(5 * MIN);
+    await engine.tick();
+    expect(sent).toEqual([]);
+    expect(engine.status(task)).toBe("waiting-permission");
+  });
+
+  it("cleans up archived agents", async () => {
+    const { engine, sent, advance, watched } = setup();
+    const task = register(engine);
+    engine.turnEnded("a");
+    engine.agentArchived("a");
+    advance(5 * MIN);
+    await engine.tick();
+    expect(sent).toEqual([]);
+    expect(task.state).toBe("archived");
+    expect(watched.has("a")).toBe(false);
+  });
+});

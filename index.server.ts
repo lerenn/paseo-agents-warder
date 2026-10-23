@@ -109,12 +109,12 @@ export default function contribute(server: PluginServerContext) {
     server.on("agent.turn_started", ({ agent }, ctx) => {
       capture(ctx);
       known(agent);
-      engine.activity(agent.id);
+      engine.turnStarted(agent.id);
     }),
     server.on("agent.turn_ended", ({ agent, timeline }, ctx) => {
       capture(ctx);
       known(agent);
-      engine.activity(agent.id);
+      engine.turnEnded(agent.id);
       const heuristics = current?.announcedWork;
       if (!heuristics?.enabled || store.optedOut(agent.id) || store.active(agent.id).length > 0) return;
       const report = analyze(lastAssistantText(timeline as { type: string; text?: string }[]));
@@ -152,7 +152,7 @@ export default function contribute(server: PluginServerContext) {
     } catch (error) {
       console.error("warder: tick failed", error);
     }
-    if (!stopped) timer = setTimeout(loop, (current?.tickSeconds ?? 15) * 1000);
+    if (!stopped) timer = setTimeout(loop, (current?.tickSeconds ?? 60) * 1000);
   };
   timer = setTimeout(loop, 15_000);
 
