@@ -73,6 +73,21 @@ describe("plugin entry", () => {
     expect((await handlers["warder.list"]({}, ctx)).tasks).toEqual([]);
   });
 
+  it("stores PASEO_WARDER_INTERVAL as the agent's default and rejects a bad value at creation", async () => {
+    const { handlers, ctx } = boot();
+    await expect(handlers["agent.create"](request({ PASEO_WARDER_INTERVAL: "soon" }), ctx)).rejects.toThrow(/PASEO_WARDER_INTERVAL/);
+    const out = await handlers["agent.create"](request({ PASEO_WARDER_INTERVAL: "15m" }), ctx);
+    const capability = out.env.PASEO_WARDER_CAPABILITY;
+    handlers["agent.session_open"]({ request: { agentId: "a9", env: { PASEO_WARDER_CAPABILITY: capability, PASEO_WARDER_INTERVAL: "15m" } } }, ctx);
+    const reply = await fetch(`${(await handlers["warder.list"]({}, ctx)).endpoint.url}/mcp`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${capability}` },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "warder_register", arguments: { task: "t" } } }),
+    });
+    const body: any = await reply.json();
+    expect(JSON.parse(body.result.content[0].text).interval_minutes).toBe(15);
+  });
+
   it("lists project, workspace and conversation names with each task", async () => {
     const { handlers, ctx } = boot({ announcedWork: { enabled: true, intervalMinutes: 5 } });
     await handlers["agent.create"](request(), ctx);
