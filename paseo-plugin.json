@@ -1,0 +1,9 @@
+{
+  "id": "agents-warder",
+  "name": "Agents warder",
+  "description": "Agents register tasks they work on or wait for; Warder pings them when they go quiet and tells the parent.",
+  "requirements": {
+    "paseo": ">=0.11.2"
+  },
+  "build": [["npm", "ci"]]
+}
