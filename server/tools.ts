@@ -115,13 +115,31 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: "warder_update",
-    description: "Record progress on a watched task. Counts as activity, so the quiet timer restarts.",
-    input: z.object({ task_id: z.string(), note: z.string().min(1).max(1000) }),
-    run({ task_id, note }, ctx) {
-      const task = find(task_id, ctx);
-      if (task.state !== "active") throw new UsageError(`Task ${task_id} is ${task.state}.`);
-      ctx.engine.note(task, note);
-      return summary(task, ctx);
+    description:
+      "Record progress on a watched task. Counts as activity, so the quiet timer restarts. " +
+      "Set waiting_on (e.g. \"CI on PR 12\") to mark that you, or a subagent of yours via agent_id, is waiting on something: " +
+      "the supervising coordinator is not told the agent went idle until the mark is cleared (waiting_on empty) or the agent gets new input. " +
+      "task_id is optional when only setting or clearing waiting_on.",
+    input: z.object({
+      task_id: z.string().optional(),
+      note: z.string().min(1).max(1000).optional(),
+      waiting_on: z.string().max(300).optional().describe("What the agent waits on. Empty string clears the mark."),
+      agent_id: z.string().optional().describe("The agent to mark waiting; defaults to you. Must be you or a descendant."),
+    }),
+    run({ task_id, note, waiting_on, agent_id }, ctx) {
+      if (!note && waiting_on === undefined) throw new UsageError("Give a note, waiting_on, or both.");
+      const task = task_id ? find(task_id, ctx) : undefined;
+      if (task && task.state !== "active") throw new UsageError(`Task ${task_id} is ${task.state}.`);
+      if (waiting_on !== undefined) {
+        const target = agent_id ?? task?.agentId ?? ctx.callerId;
+        if (target !== ctx.callerId && !ctx.engine.store.isAncestor(ctx.callerId, target)) {
+          throw new UsageError(`${target} is not you or your subagent (or warder has not seen it yet).`);
+        }
+        ctx.engine.setWaiting(target, waiting_on.trim() || null);
+      }
+      if (task && note) ctx.engine.note(task, note);
+      else if (task) ctx.engine.activity(task.agentId);
+      return task ? summary(task, ctx) : { waiting_on: waiting_on?.trim() || null };
     },
   },
   {

@@ -166,8 +166,9 @@ export default function contribute(server: PluginServerContext) {
   // Project and workspace names come from the workspace directory; looked up once per agent and kept.
   let namesCheckedAt = 0;
   async function resolveNames(ctx: { paseo: Paseo }) {
-    const missing = store.all().filter((t) => {
-      const a = store.agent(t.agentId);
+    const ids = [...store.all().map((t) => t.agentId), ...store.supervisions().map((x) => x.agentId)];
+    const missing = ids.filter((id) => {
+      const a = store.agent(id);
       return a?.workspaceId && !(a.projectName && a.workspaceName);
     });
     if (missing.length === 0 || Date.now() - namesCheckedAt < 30_000) return;
@@ -175,11 +176,11 @@ export default function contribute(server: PluginServerContext) {
     try {
       const { entries } = await ctx.paseo.workspaces.list();
       const byId = new Map(entries.map((w) => [w.id, w]));
-      for (const task of missing) {
-        const agent = store.agent(task.agentId);
+      for (const id of missing) {
+        const agent = store.agent(id);
         const ws = agent?.workspaceId ? byId.get(agent.workspaceId) : undefined;
         if (ws) {
-          store.upsertAgent(task.agentId, {
+          store.upsertAgent(id, {
             projectName: ws.projectCustomName || ws.projectDisplayName,
             workspaceName: ws.title || ws.name,
           });
@@ -190,15 +191,27 @@ export default function contribute(server: PluginServerContext) {
     }
   }
 
-  // Children created before warder saw them are only known through the agent list.
-  async function seedChildren(ctx: { paseo: Paseo }, parentId: string) {
+  // Children created before warder saw them are only known through the agent list. The list holds
+  // the live agents only, so a known child missing from it, or closed, was archived without warder noticing.
+  let reconciledAt = 0;
+  async function seedChildren(ctx: { paseo: Paseo }, extra?: string) {
+    if (!extra && Date.now() - reconciledAt < 30_000) return;
+    reconciledAt = Date.now();
     try {
       const { entries } = await ctx.paseo.agents.list({ filter: { includeArchived: false } } as never);
-      for (const { agent } of entries as { agent: { id: string; title: string | null; workspaceId: string | null; parentAgentId?: string | null; labels?: Record<string, string> } }[]) {
+      type Listed = { id: string; title: string | null; workspaceId: string | null; status?: string; parentAgentId?: string | null; labels?: Record<string, string> };
+      const live = new Map<string, Listed>();
+      for (const { agent } of entries as { agent: Listed }[]) if (agent.status !== "closed") live.set(agent.id, agent);
+      const supervisors = new Set([...store.supervisions().map((x) => x.agentId), ...(extra ? [extra] : [])]);
+      for (const agent of live.values()) {
         const parent = agent.parentAgentId ?? agent.labels?.["paseo.parent-agent-id"] ?? null;
-        if (parent !== parentId) continue;
+        if (!supervisors.has(agent.id) && !(parent && supervisors.has(parent))) continue;
         store.upsertAgent(agent.id, { title: agent.title, parentId: parent, workspaceId: agent.workspaceId });
         engine.childSeen(agent.id);
+      }
+      for (const sup of supervisors) {
+        if (!live.has(sup)) continue; // a truncated or odd list must not archive everything
+        for (const child of store.children(sup)) if (!live.has(child)) engine.agentArchived(child);
       }
     } catch (error) {
       console.error("warder: agent lookup failed", error);
@@ -209,7 +222,10 @@ export default function contribute(server: PluginServerContext) {
     capture(ctx);
     await ready;
     const command = parseCommand(args);
-    if (command.kind === "supervise") await seedChildren(ctx, agentId);
+    if (command.kind === "supervise") {
+      store.upsertAgent(agentId, {});
+      await seedChildren(ctx, agentId);
+    }
     const message = await runCommand(engine, agentId, command);
     try {
       await ctx.paseo.agents.ref(agentId).timeline.append({ type: "plugin", id: `warder-${Date.now()}`, kind: "warder-note", version: 1, data: { text: message } });
@@ -225,6 +241,7 @@ export default function contribute(server: PluginServerContext) {
   });
   server.handle(listTasksRpc, async (_input, ctx) => {
     capture(ctx);
+    await seedChildren(ctx);
     await resolveNames(ctx);
     return { now: Date.now(), tasks: engine.views(), supervisions: engine.supervisionViews(), settings: current, settingsError, endpoint: { url, error: startError } };
   });
