@@ -42,6 +42,8 @@ export interface KnownAgent {
   /** Created with PASEO_WARDER=off. */
   optOut: boolean;
   archived: boolean;
+  /** Set via warder_update: what the agent is waiting on; suppresses idle attention until cleared. */
+  waitingOn?: string | null;
 }
 
 /** `/warder supervise`: a coordinator watched for the needs of its children. */
@@ -154,6 +156,13 @@ export class Store {
     this.state.agents[id] = next;
     this.save();
     return next;
+  }
+
+  setWaiting(id: string, reason: string | null): void {
+    const agent = this.state.agents[id];
+    if (!agent || (agent.waitingOn ?? null) === reason) return;
+    agent.waitingOn = reason;
+    this.save();
   }
 
   /** True when `ancestor` is `agentId`'s parent, or the parent of its parent, and so on. */

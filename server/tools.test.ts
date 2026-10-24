@@ -100,4 +100,14 @@ describe("tools", () => {
     expect((await call("stranger", "warder_list", {})).json).toEqual([]);
     expect((await call("boss", "warder_list", {})).json).toHaveLength(1);
   });
+
+  it("warder_update sets and clears a waiting mark for self or a subagent only", async () => {
+    const { call, store } = setup();
+    expect((await call("worker", "warder_update", { waiting_on: "CI" })).error).toBe(false);
+    expect(store.agent("worker")?.waitingOn).toBe("CI");
+    expect((await call("boss", "warder_update", { agent_id: "worker", waiting_on: "" })).error).toBe(false);
+    expect(store.agent("worker")?.waitingOn).toBeNull();
+    expect((await call("stranger", "warder_update", { agent_id: "worker", waiting_on: "x" })).error).toBe(true);
+    expect((await call("boss", "warder_update", {})).error).toBe(true);
+  });
 });

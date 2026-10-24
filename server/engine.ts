@@ -25,6 +25,13 @@ export class Engine {
   private readonly ownSendAt = new Map<string, number>();
   /** The event of each supervised child the coordinator was last pinged about. */
   private readonly notified = new Map<string, number>();
+  /**
+   * Turns triggered by a message from the coordinator (or user): pending until the turn starts,
+   * running, and ended. An ended one without an open task is the reply, not a new event.
+   */
+  private readonly reactPending = new Set<string>();
+  private readonly reactRunning = new Set<string>();
+  private readonly reactEnded = new Set<string>();
 
   constructor(
     readonly store: Store,
@@ -74,6 +81,14 @@ export class Engine {
   userMessage(agentId: string): void {
     if (this.now() - (this.ownSendAt.get(agentId) ?? Number.NEGATIVE_INFINITY) < 15_000) return;
     this.actedAt.set(agentId, this.now());
+    this.store.setWaiting(agentId, null);
+    this.reactEnded.delete(agentId);
+    (this.running.has(agentId) ? this.reactRunning : this.reactPending).add(agentId);
+  }
+
+  /** Mark (or, with null, clear) what an agent is waiting on; idle attention for it is suppressed meanwhile. */
+  setWaiting(agentId: string, reason: string | null): void {
+    this.store.setWaiting(agentId, reason);
   }
 
   private attention(parentId: string, s: WarderSettings): { agentId: string; title: string | null; reason: string; since: number }[] {
@@ -90,6 +105,7 @@ export class Engine {
         event = { since: permissionSince, reason: `waiting on a permission request for ${min(permissionSince)} min` };
       } else if (idle !== undefined && !this.running.has(child)) {
         const tasks = this.store.active(child);
+        if (this.store.agent(child)?.waitingOn || (this.reactEnded.has(child) && tasks.length === 0)) continue;
         event = {
           since: idle,
           reason: tasks.length > 0 ? `stopped its turn ${min(idle)} min ago without finishing '${tasks[0].task}'` : `finished its turn ${min(idle)} min ago`,
@@ -166,12 +182,15 @@ export class Engine {
   turnStarted(agentId: string): void {
     this.running.add(agentId);
     this.idleSince.delete(agentId);
+    if (this.reactPending.delete(agentId)) this.reactRunning.add(agentId);
+    else if (!this.reactRunning.has(agentId)) this.reactEnded.delete(agentId);
     this.activity(agentId);
   }
 
   turnEnded(agentId: string): void {
     this.running.delete(agentId);
     this.idleSince.set(agentId, this.now());
+    if (this.reactRunning.delete(agentId)) this.reactEnded.add(agentId);
     this.activity(agentId);
   }
 
@@ -196,6 +215,9 @@ export class Engine {
     this.permissions.delete(agentId);
     this.running.delete(agentId);
     this.idleSince.delete(agentId);
+    this.reactPending.delete(agentId);
+    this.reactRunning.delete(agentId);
+    this.reactEnded.delete(agentId);
     for (const task of this.store.active(agentId)) this.finish(task, "archived");
   }
 

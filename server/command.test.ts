@@ -170,4 +170,66 @@ describe("supervise", () => {
     await runCommand(engine, "boss", parseCommand("supervise stop"));
     expect(engine.supervisionViews()).toEqual([]);
   });
+
+  it("does not re-ping after a child's reply to the coordinator's own message", async () => {
+    const { engine, store, sent, advance } = setup();
+    await runCommand(engine, "boss", parseCommand("supervise"));
+    advance(1);
+    child(store, "c1");
+    engine.turnStarted("c1");
+    engine.turnEnded("c1");
+    advance(MIN);
+    engine.userMessage("c1"); // the coordinator answers
+    engine.turnStarted("c1");
+    advance(MIN);
+    engine.turnEnded("c1"); // reply, no new work
+    advance(20 * MIN);
+    await engine.tick();
+    expect(sent).toEqual([]);
+    expect(engine.supervisionViews()[0].needAttention).toBe(0);
+  });
+
+  it("still flags a reply turn that left a task open", async () => {
+    const { engine, store, advance } = setup();
+    await runCommand(engine, "boss", parseCommand("supervise"));
+    advance(1);
+    child(store, "c1");
+    engine.turnStarted("c1");
+    engine.turnEnded("c1");
+    advance(MIN);
+    engine.userMessage("c1");
+    engine.turnStarted("c1");
+    engine.register({ agentId: "c1", task: "wait", intervalMinutes: 10, until: null, registeredBy: "c1", source: "agent" });
+    advance(MIN);
+    engine.turnEnded("c1");
+    advance(6 * MIN);
+    expect(engine.supervisionViews()[0].needAttention).toBe(1);
+  });
+
+  it("a waiting mark suppresses idle attention until cleared or new input", async () => {
+    const { engine, store, advance } = setup();
+    await runCommand(engine, "boss", parseCommand("supervise"));
+    advance(1);
+    child(store, "c1");
+    engine.turnStarted("c1");
+    engine.turnEnded("c1");
+    engine.setWaiting("c1", "CI");
+    advance(20 * MIN);
+    expect(engine.supervisionViews()[0].needAttention).toBe(0);
+    engine.setWaiting("c1", null);
+    expect(engine.supervisionViews()[0].needAttention).toBe(1);
+    engine.setWaiting("c1", "CI");
+    expect(engine.supervisionViews()[0].needAttention).toBe(0);
+    engine.userMessage("c1");
+    expect(store.agent("c1")?.waitingOn).toBeNull();
+  });
+
+  it("counts only live children", async () => {
+    const { engine, store } = setup();
+    await runCommand(engine, "boss", parseCommand("supervise"));
+    child(store, "c1");
+    child(store, "c2");
+    engine.agentArchived("c2");
+    expect(engine.supervisionViews()[0].children).toBe(1);
+  });
 });
