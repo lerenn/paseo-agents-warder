@@ -22,7 +22,10 @@ export const taskViewSchema = z.object({
   projectName: z.string().nullable(),
   workspaceName: z.string().nullable(),
   task: z.string(),
+  /** The hang backstop in effect (the registered interval, clamped to the max setting). */
   intervalMinutes: z.number(),
+  turn: z.enum(["running", "idle", "waiting-permission", "unknown"]),
+  idleSince: z.number().nullable(),
   until: z.number().nullable(),
   registeredBy: z.string(),
   source: z.enum(["agent", "parent", "announced-work"]),
