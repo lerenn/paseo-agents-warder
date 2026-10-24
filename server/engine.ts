@@ -15,6 +15,9 @@ export class Engine {
   private lastSendAt = Number.NEGATIVE_INFINITY;
   private busy = false;
   private readonly permissions = new Set<string>();
+  /** Agents whose turn is running, and when idle agents' last turn ended. Unknown agents are in neither. */
+  private readonly running = new Set<string>();
+  private readonly idleSince = new Map<string, number>();
 
   constructor(
     readonly store: Store,
@@ -57,6 +60,18 @@ export class Engine {
     for (const task of this.store.active(agentId)) this.markActive(task);
   }
 
+  turnStarted(agentId: string): void {
+    this.running.add(agentId);
+    this.idleSince.delete(agentId);
+    this.activity(agentId);
+  }
+
+  turnEnded(agentId: string): void {
+    this.running.delete(agentId);
+    this.idleSince.set(agentId, this.now());
+    this.activity(agentId);
+  }
+
   permission(agentId: string, pending: boolean): void {
     if (pending) this.permissions.add(agentId);
     else this.permissions.delete(agentId);
@@ -65,6 +80,8 @@ export class Engine {
 
   agentArchived(agentId: string): void {
     this.permissions.delete(agentId);
+    this.running.delete(agentId);
+    this.idleSince.delete(agentId);
     for (const task of this.store.active(agentId)) this.finish(task, "archived");
   }
 
@@ -120,7 +137,13 @@ export class Engine {
       await this.deliver(parentId, render(s.parentTemplate, this.vars(task)));
       return true;
     }
-    if (this.quietMs(task) < this.waitMs(task, s)) return false;
+    const idle = this.idleSince.get(task.agentId);
+    const idleAgent = idle !== undefined && !this.running.has(task.agentId);
+    if (idleAgent) {
+      // Turn over, task still open: ping after the grace period, then back off like any other ping.
+      if (this.now() - idle < s.idleGraceSeconds * 1000) return false;
+      if (task.unanswered > 0 && this.quietMs(task) < this.waitMs(task, s)) return false;
+    } else if (this.quietMs(task) < this.waitMs(task, s)) return false;
     if (task.unanswered >= s.maxUnansweredPings) {
       task.state = "gave-up";
       this.store.save();
@@ -130,7 +153,7 @@ export class Engine {
     task.pings += 1;
     task.lastPingAt = this.now();
     this.store.save();
-    await this.deliver(task.agentId, render(s.pingTemplate, this.vars(task)));
+    await this.deliver(task.agentId, render(idleAgent ? s.idlePingTemplate : s.pingTemplate, this.vars(task)));
     return true;
   }
 
@@ -151,7 +174,7 @@ export class Engine {
       agentId: task.agentId,
       title: agent?.title ?? task.agentId,
       pings: task.pings,
-      minutes: Math.max(1, Math.round((this.now() - task.lastActivityAt) / 60_000)),
+      minutes: Math.max(1, Math.round((this.now() - (this.idleSince.get(task.agentId) ?? task.lastActivityAt)) / 60_000)),
     };
   }
 
