@@ -65,11 +65,10 @@ describe("tools", () => {
     expect((await call("boss", "warder_register_subagent", { agent_id: "worker", task: "c" })).json.interval_minutes).toBe(15);
   });
 
-  it("asks for an interval when there is no default", async () => {
+  it("falls back to the 15 min backstop and clamps longer intervals", async () => {
     const { call } = setup();
-    const r = await call("worker", "warder_register", { task: "a" });
-    expect(r.error).toBe(true);
-    expect(r.text).toMatch(/PASEO_WARDER_INTERVAL/);
+    expect((await call("worker", "warder_register", { task: "a" })).json.interval_minutes).toBe(15);
+    expect((await call("worker", "warder_register", { task: "b", interval_minutes: 120 })).json.interval_minutes).toBe(15);
   });
 
   it("rejects bad input", async () => {

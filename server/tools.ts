@@ -22,13 +22,14 @@ const interval = z
   .min(1)
   .max(24 * 60)
   .optional()
-  .describe("How often warder should check on the task, in minutes (1 to 1440). Optional when the agent was created with a default interval.");
+  .describe(
+    "Hang backstop in minutes (1 to 1440): how long a RUNNING agent may stay silent before a ping. Idle stops are caught within a minute regardless. " +
+      "Values above the configured max (default 15) are clamped. Optional: defaults to PASEO_WARDER_INTERVAL, else the max.",
+  );
 
 /** The explicit interval, else the agent's creation-time default, else a clear error. */
 function intervalFor(explicit: number | undefined, agentId: string, ctx: ToolContext): number {
-  const value = explicit ?? ctx.engine.store.agent(agentId)?.defaultIntervalMinutes ?? undefined;
-  if (value === undefined) throw new UsageError("interval_minutes is required: this agent has no default interval (PASEO_WARDER_INTERVAL).");
-  return value;
+  return explicit ?? ctx.engine.store.agent(agentId)?.defaultIntervalMinutes ?? ctx.engine.defaultIntervalMinutes();
 }
 const until = z
   .string()
@@ -65,7 +66,8 @@ export const TOOLS: ToolDef[] = [
     name: "warder_register",
     description:
       "Register a task you are working on or waiting for (a long build, a CI run, a subagent, a review). Warder will prompt you if " +
-      "you show no activity for interval_minutes, and tell your parent agent if you stay silent. Returns task_id. Call warder_done when finished.",
+      "your turn ends without warder_done (pinged within about a minute) or you hang silently for interval_minutes while running. " +
+      "interval_minutes only matters for hangs. Your parent is told if you stay silent. Returns task_id. Call warder_done when finished.",
     input: z.object({
       task: z.string().min(1).max(500).describe("What you are doing or waiting for."),
       interval_minutes: interval,
@@ -86,8 +88,8 @@ export const TOOLS: ToolDef[] = [
   {
     name: "warder_register_subagent",
     description:
-      "Register a warder on one of your subagents (you must be its parent or an ancestor). Warder prompts that agent when it goes quiet " +
-      "for interval_minutes and notifies you if it stays unresponsive.",
+      "Register a warder on one of your subagents (you must be its parent or an ancestor). Warder prompts that agent within a minute of its turn ending without warder_done, " +
+      "or after interval_minutes of silence while it runs (hangs), and notifies you if it stays unresponsive.",
     input: z.object({
       agent_id: z.string().min(1).describe("The subagent to warder."),
       task: z.string().min(1).max(500).describe("What the subagent is expected to be doing."),

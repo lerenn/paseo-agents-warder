@@ -11,6 +11,19 @@ function ago(now: number, at: number | null): string {
   return min < 1 ? "just now" : min < 90 ? `${min} min ago` : `${Math.round(min / 60)} h ago`;
 }
 
+function turnLabel(t: TaskView, now: number): string {
+  switch (t.turn) {
+    case "running":
+      return "running";
+    case "idle":
+      return `idle since ${t.idleSince ? Math.max(0, Math.round((now - t.idleSince) / 60_000)) : 0}m`;
+    case "waiting-permission":
+      return "waiting for permission";
+    default:
+      return "turn state unknown";
+  }
+}
+
 type Colors = PluginScreenProps["theme"]["colors"];
 
 /** Badge color per status, taken from the theme so it works in every theme. */
@@ -114,7 +127,7 @@ export function WarderScreen({ theme, layout }: PluginScreenProps) {
         Agent {t.agentId}
       </Text>
       <Text style={s.muted}>
-        every {t.intervalMinutes} min · last activity {ago(data!.now, t.lastActivityAt)}
+        {turnLabel(t, data!.now)} · pings {settings ? Math.max(1, Math.round(settings.idleGraceSeconds / 60)) : 1} min after it stops · hang check {t.intervalMinutes} min · last activity {ago(data!.now, t.lastActivityAt)}
       </Text>
       <Text style={s.muted}>
         {t.pings} pings sent ({t.unanswered} unanswered) · registered by {t.registeredBy === t.agentId ? "the agent" : t.registeredBy} ({t.source})
@@ -153,7 +166,7 @@ export function WarderScreen({ theme, layout }: PluginScreenProps) {
         <View style={s.card}>
           <Text style={s.muted}>Tools for: {settings.scope === "all" ? "all agents (PASEO_WARDER=off opts out)" : "agents created with PASEO_WARDER=on"}</Text>
           <Text style={s.muted}>At most one prompt every {settings.globalGapSeconds} s across agents</Text>
-          <Text style={s.muted}>Backoff x{settings.backoffFactor} up to {settings.maxBackoffIntervals} intervals; parent notified after {settings.notifyParentAfterPings} unanswered pings; give up after {settings.maxUnansweredPings}</Text>
+          <Text style={s.muted}>Hang backstop capped at {settings.maxIntervalMinutes} min; backoff x{settings.backoffFactor} up to {settings.maxBackoffIntervals} intervals; parent notified after {settings.notifyParentAfterPings} unanswered pings; give up after {settings.maxUnansweredPings}</Text>
           <Text style={s.muted}>Announced-work detection: {settings.announcedWork.enabled ? `on (every ${settings.announcedWork.intervalMinutes} min)` : "off"}</Text>
           <Text style={s.muted}>Edit these under Settings → Plugins → Agents Warder.</Text>
         </View>

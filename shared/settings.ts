@@ -24,6 +24,8 @@ export const settingsSchema = z.object({
   globalGapSeconds: z.number().int().min(1).default(30),
   /** Ping an agent whose turn ended without warder_done once it has been idle this long. Running agents are never pinged for idleness. */
   idleGraceSeconds: z.number().int().min(0).default(60),
+  /** Hang backstop: the longest a running agent may stay silent before a ping. Longer agent-registered intervals are clamped to it, and it is the default interval. */
+  maxIntervalMinutes: z.number().min(1).default(15),
   /** Each unanswered ping multiplies the wait for the next one by this factor... */
   backoffFactor: z.number().min(1).default(2),
   /** ...up to this many intervals. */

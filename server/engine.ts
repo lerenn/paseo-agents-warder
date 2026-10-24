@@ -29,7 +29,7 @@ export class Engine {
   // ---- registration ----
 
   register(input: { agentId: string; task: string; intervalMinutes: number; until: number | null; registeredBy: string; source: Task["source"] }): Task {
-    const task = this.store.add(input, this.now());
+    const task = this.store.add({ ...input, intervalMinutes: this.effectiveMinutes(input) }, this.now());
     this.actions.watch(task.agentId);
     return task;
   }
@@ -96,7 +96,23 @@ export class Engine {
 
   private waitMs(task: Task, s: WarderSettings): number {
     const factor = Math.min(s.backoffFactor ** task.unanswered, s.maxBackoffIntervals);
-    return task.intervalMinutes * 60_000 * factor;
+    return this.effectiveMinutes(task, s) * 60_000 * factor;
+  }
+
+  /** The registered interval, clamped to the max setting. */
+  private effectiveMinutes(task: { intervalMinutes: number }, s: WarderSettings | null = this.settings()): number {
+    return s ? Math.min(task.intervalMinutes, s.maxIntervalMinutes) : task.intervalMinutes;
+  }
+
+  /** Backstop used when an agent registers without an interval. */
+  defaultIntervalMinutes(): number {
+    return this.settings()?.maxIntervalMinutes ?? 15;
+  }
+
+  private turnState(agentId: string): TaskView["turn"] {
+    if (this.permissions.has(agentId)) return "waiting-permission";
+    if (this.running.has(agentId)) return "running";
+    return this.idleSince.has(agentId) ? "idle" : "unknown";
   }
 
   private quietMs(task: Task): number {
@@ -199,7 +215,9 @@ export class Engine {
         projectName: agent?.projectName ?? null,
         workspaceName: agent?.workspaceName ?? null,
         task: t.task,
-        intervalMinutes: t.intervalMinutes,
+        intervalMinutes: this.effectiveMinutes(t),
+        turn: this.turnState(t.agentId),
+        idleSince: this.idleSince.get(t.agentId) ?? null,
         until: t.until,
         registeredBy: t.registeredBy,
         source: t.source,

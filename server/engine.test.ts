@@ -25,6 +25,21 @@ function setup(overrides: Record<string, unknown> = {}) {
 const register = (e: Engine, agentId = "a", intervalMinutes = 10, extra: Record<string, unknown> = {}) =>
   e.register({ agentId, task: "wait for CI", intervalMinutes, until: null, registeredBy: agentId, source: "agent", ...extra });
 
+describe("backstop clamp", () => {
+  it("clamps a stored long interval on load, so a hung running agent is pinged at the max", async () => {
+    const { engine, store, sent, advance } = setup();
+    const task = register(engine);
+    task.intervalMinutes = 120; // as persisted by an older version
+    engine.turnStarted("a");
+    advance(16 * MIN);
+    await engine.tick();
+    expect(sent).toHaveLength(1);
+    expect(engine.views()[0].intervalMinutes).toBe(15);
+    expect(engine.views()[0].turn).toBe("running");
+    void store;
+  });
+});
+
 describe("pings", () => {
   it("pings after the interval of inactivity, with the task in the prompt", async () => {
     const { engine, sent, advance } = setup();
