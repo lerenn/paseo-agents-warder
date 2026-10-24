@@ -97,3 +97,14 @@ describe("plugin entry", () => {
     expect(task).toMatchObject({ agentId: "a3", agentTitle: "My conversation", projectName: "Proj", workspaceName: "Nice workspace", workspaceId: "w" });
   });
 });
+
+describe("/warder command", () => {
+  it("registers a user task through the RPC and lists it as the user's", async () => {
+    const { handlers, ctx, sent } = boot();
+    const out = await handlers["warder.command"]({ agentId: "a5", args: "babysit deploy --interval 3" }, { ...ctx, paseo: { ...ctx.paseo, agents: { ref: (id: string) => ({ send: async (text: string) => void sent.push({ id, text }), timeline: { subscribe: () => () => {}, append: async () => {} } }) } } });
+    expect(out.message).toContain("babysit deploy");
+    const list = await handlers["warder.list"]({}, ctx);
+    expect(list.tasks[0]).toMatchObject({ agentId: "a5", registeredBy: "user", source: "user", intervalMinutes: 3 });
+    expect(sent[0].text).toContain("put you under watch");
+  });
+});

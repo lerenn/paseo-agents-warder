@@ -2,7 +2,7 @@ import { useRpc, type PluginScreenProps } from "@getpaseo/plugin/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { cancelTaskRpc, listTasksRpc } from "../shared/rpc";
+import { cancelTaskRpc, listTasksRpc, stopSupervisionRpc } from "../shared/rpc";
 import type { TaskStatus, TaskView } from "../shared/task";
 
 function ago(now: number, at: number | null): string {
@@ -82,10 +82,16 @@ function Collapsible({ title, summary, styles, children }: { title: string; summ
 export function WarderScreen({ theme, layout }: PluginScreenProps) {
   const list = useRpc(listTasksRpc);
   const cancel = useRpc(cancelTaskRpc);
+  const stopSupervision = useRpc(stopSupervisionRpc);
   const queryClient = useQueryClient();
   const query = useQuery({ queryKey: ["warder", "tasks"], queryFn: () => list({}), refetchInterval: 10_000 });
   const stop = useMutation({
     mutationFn: (taskId: string) => cancel({ taskId }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["warder", "tasks"] }),
+  });
+
+  const stopSup = useMutation({
+    mutationFn: (agentId: string) => stopSupervision({ agentId }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["warder", "tasks"] }),
   });
 
@@ -130,7 +136,7 @@ export function WarderScreen({ theme, layout }: PluginScreenProps) {
         {turnLabel(t, data!.now)} · pings {settings ? Math.max(1, Math.round(settings.idleGraceSeconds / 60)) : 1} min after it stops · hang check {t.intervalMinutes} min · last activity {ago(data!.now, t.lastActivityAt)}
       </Text>
       <Text style={s.muted}>
-        {t.pings} pings sent ({t.unanswered} unanswered) · registered by {t.registeredBy === t.agentId ? "the agent" : t.registeredBy} ({t.source})
+        {t.pings} pings sent ({t.unanswered} unanswered) · registered by {t.registeredBy === t.agentId ? "the agent" : t.registeredBy === "user" ? "the user" : t.registeredBy} ({t.source})
         {t.until ? ` · until ${new Date(t.until).toLocaleString()}` : ""}
       </Text>
       {t.notes.length > 0 ? <Text style={s.muted}>Last note: {t.notes[t.notes.length - 1].text}</Text> : null}
@@ -151,9 +157,31 @@ export function WarderScreen({ theme, layout }: PluginScreenProps) {
       <Text style={s.h}>Watched tasks</Text>
       {query.isError ? <Text style={s.muted}>Could not load: {String(query.error)}</Text> : null}
       {data?.endpoint.error ? <Text style={s.text}>{data.endpoint.error}</Text> : null}
-      {data && tasks.length === 0 ? (
+      {data && tasks.length === 0 && data.supervisions.length === 0 ? (
         <Text style={s.muted}>No tasks yet. Agents register them with warder_register; a parent can use warder_register_subagent.</Text>
       ) : null}
+      {(data?.supervisions ?? []).map((v) => (
+        <View key={`sup-${v.agentId}`} style={s.card}>
+          <View style={s.row}>
+            <Text style={[s.text, { flex: 1 }]}>
+              supervising {v.children} agents · {v.needAttention} need attention
+            </Text>
+            <Pressable accessibilityRole="button" accessibilityLabel={`Stop supervising ${v.agentTitle ?? v.agentId}`} onPress={() => stopSup.mutate(v.agentId)} style={s.button}>
+              <Text style={s.text}>Stop</Text>
+            </Pressable>
+          </View>
+          <Text style={s.muted}>
+            {[v.projectName, v.workspaceName].filter(Boolean).join(" › ") || "Unknown workspace"}
+            {" · "}
+            {v.agentTitle ?? "Untitled conversation"} · registered by the user
+          </Text>
+          {v.attention.map((a) => (
+            <Text key={a.agentId} style={s.muted}>
+              {a.title ?? a.agentId}: {a.reason}
+            </Text>
+          ))}
+        </View>
+      ))}
       {tasks.filter((t) => ACTIVE.includes(t.status)).map(renderTask)}
       {finished.length > 0 ? (
         <Collapsible title="Finished tasks" summary={`${finished.length}`} styles={s}>

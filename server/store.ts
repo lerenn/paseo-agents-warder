@@ -15,7 +15,7 @@ export interface Task {
   until: number | null;
   /** Agent id that registered it. */
   registeredBy: string;
-  source: "agent" | "parent" | "announced-work";
+  source: "agent" | "parent" | "announced-work" | "user";
   state: TaskState;
   createdAt: number;
   /** Last timeline activity of the agent, other than warder's own prompts. */
@@ -41,6 +41,13 @@ export interface KnownAgent {
   defaultIntervalMinutes: number | null;
   /** Created with PASEO_WARDER=off. */
   optOut: boolean;
+  archived: boolean;
+}
+
+/** `/warder supervise`: a coordinator watched for the needs of its children. */
+export interface Supervision {
+  agentId: string;
+  createdAt: number;
 }
 
 interface Session {
@@ -52,6 +59,7 @@ interface State {
   sessions: Record<string, Session>;
   agents: Record<string, KnownAgent>;
   tasks: Task[];
+  supervisions: Supervision[];
 }
 
 const UNBOUND_TTL_MS = 7 * 24 * 3600 * 1000;
@@ -67,12 +75,12 @@ export class Store {
   }
 
   private load(): State {
-    if (!this.file) return { sessions: {}, agents: {}, tasks: [] };
+    if (!this.file) return { sessions: {}, agents: {}, tasks: [], supervisions: [] };
     try {
       const s = JSON.parse(readFileSync(this.file, "utf8"));
-      return { sessions: s.sessions ?? {}, agents: s.agents ?? {}, tasks: s.tasks ?? [] };
+      return { sessions: s.sessions ?? {}, agents: s.agents ?? {}, tasks: s.tasks ?? [], supervisions: s.supervisions ?? [] };
     } catch {
-      return { sessions: {}, agents: {}, tasks: [] };
+      return { sessions: {}, agents: {}, tasks: [], supervisions: [] };
     }
   }
 
@@ -132,7 +140,7 @@ export class Store {
   }
 
   upsertAgent(id: string, patch: Partial<KnownAgent>): KnownAgent {
-    const cur = this.state.agents[id] ?? { title: null, parentId: null, workspaceId: null, projectName: null, workspaceName: null, defaultIntervalMinutes: null, optOut: false };
+    const cur = this.state.agents[id] ?? { title: null, parentId: null, workspaceId: null, projectName: null, workspaceName: null, defaultIntervalMinutes: null, optOut: false, archived: false };
     const next: KnownAgent = {
       title: patch.title ?? cur.title,
       parentId: patch.parentId ?? cur.parentId,
@@ -141,6 +149,7 @@ export class Store {
       projectName: patch.projectName ?? cur.projectName ?? null,
       workspaceName: patch.workspaceName ?? cur.workspaceName ?? null,
       optOut: patch.optOut ?? cur.optOut,
+      archived: patch.archived ?? cur.archived ?? false,
     };
     this.state.agents[id] = next;
     this.save();
@@ -165,6 +174,35 @@ export class Store {
       seen.add(cur);
     }
     return false;
+  }
+
+  // ---- supervision ----
+
+  supervisions(): Supervision[] {
+    return this.state.supervisions;
+  }
+
+  supervising(agentId: string): boolean {
+    return this.state.supervisions.some((s) => s.agentId === agentId);
+  }
+
+  superviseAdd(agentId: string, now: number): void {
+    if (!this.supervising(agentId)) this.state.supervisions.push({ agentId, createdAt: now });
+    this.save();
+  }
+
+  superviseRemove(agentId: string): boolean {
+    const before = this.state.supervisions.length;
+    this.state.supervisions = this.state.supervisions.filter((s) => s.agentId !== agentId);
+    this.save();
+    return this.state.supervisions.length < before;
+  }
+
+  /** Direct, non-archived children warder has seen. */
+  children(parentId: string): string[] {
+    return Object.entries(this.state.agents)
+      .filter(([, a]) => a.parentId === parentId && !a.archived)
+      .map(([id]) => id);
   }
 
   // ---- tasks ----

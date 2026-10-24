@@ -1,6 +1,7 @@
 import type { PluginHookContext, PluginServerContext } from "@getpaseo/plugin/server";
-import { cancelTaskRpc, listTasksRpc } from "./shared/rpc";
+import { cancelTaskRpc, commandRpc, listTasksRpc, stopSupervisionRpc } from "./shared/rpc";
 import { warderSettings, type WarderSettings } from "./shared/settings";
+import { parseCommand, runCommand } from "./server/command";
 import { analyze, lastAssistantText } from "./server/classify";
 import { Engine, type Actions } from "./server/engine";
 import { WarderHttp } from "./server/http";
@@ -47,7 +48,10 @@ export default function contribute(server: PluginServerContext) {
       const subscription = paseo.agents.ref(agentId).timeline.subscribe((event) => {
         // Warder's own prompt arrives as a user message; it is not the agent doing something.
         const item = (event as { event?: { item?: { type?: string } } }).event?.item;
-        if (item?.type === "user_message") return;
+        if (item?.type === "user_message") {
+          engine.userMessage(agentId);
+          return;
+        }
         engine.activity(agentId);
       });
       watchers.set(agentId, () => (subscription as unknown as () => void)());
@@ -75,8 +79,11 @@ export default function contribute(server: PluginServerContext) {
     },
   );
 
-  const known = (agent: HookAgent) =>
-    store.upsertAgent(agent.id, { title: agent.title, parentId: agent.parentAgentId, workspaceId: agent.workspaceId });
+  const known = (agent: HookAgent) => {
+    const result = store.upsertAgent(agent.id, { title: agent.title, parentId: agent.parentAgentId, workspaceId: agent.workspaceId });
+    engine.childSeen(agent.id);
+    return result;
+  };
 
   const removers = [
     server.before("agent.create", async ({ request }, ctx) => {
@@ -183,10 +190,43 @@ export default function contribute(server: PluginServerContext) {
     }
   }
 
+  // Children created before warder saw them are only known through the agent list.
+  async function seedChildren(ctx: { paseo: Paseo }, parentId: string) {
+    try {
+      const { entries } = await ctx.paseo.agents.list({ filter: { includeArchived: false } } as never);
+      for (const { agent } of entries as { agent: { id: string; title: string | null; workspaceId: string | null; parentAgentId?: string | null; labels?: Record<string, string> } }[]) {
+        const parent = agent.parentAgentId ?? agent.labels?.["paseo.parent-agent-id"] ?? null;
+        if (parent !== parentId) continue;
+        store.upsertAgent(agent.id, { title: agent.title, parentId: parent, workspaceId: agent.workspaceId });
+        engine.childSeen(agent.id);
+      }
+    } catch (error) {
+      console.error("warder: agent lookup failed", error);
+    }
+  }
+
+  server.handle(commandRpc, async ({ agentId, args }, ctx) => {
+    capture(ctx);
+    await ready;
+    const command = parseCommand(args);
+    if (command.kind === "supervise") await seedChildren(ctx, agentId);
+    const message = await runCommand(engine, agentId, command);
+    try {
+      await ctx.paseo.agents.ref(agentId).timeline.append({ type: "plugin", id: `warder-${Date.now()}`, kind: "warder-note", version: 1, data: { text: message } });
+    } catch (error) {
+      console.error("warder: could not append the command result", error);
+    }
+    return { message };
+  });
+  server.handle(stopSupervisionRpc, ({ agentId }, ctx) => {
+    capture(ctx);
+    engine.superviseStop(agentId);
+    return {};
+  });
   server.handle(listTasksRpc, async (_input, ctx) => {
     capture(ctx);
     await resolveNames(ctx);
-    return { now: Date.now(), tasks: engine.views(), settings: current, settingsError, endpoint: { url, error: startError } };
+    return { now: Date.now(), tasks: engine.views(), supervisions: engine.supervisionViews(), settings: current, settingsError, endpoint: { url, error: startError } };
   });
   server.handle(cancelTaskRpc, ({ taskId }, ctx) => {
     capture(ctx);

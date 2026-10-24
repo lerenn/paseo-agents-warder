@@ -24,9 +24,21 @@ Create an agent with `PASEO_WARDER_INTERVAL` (for example `15m`, `1h30m`, or `90
 
 By default every new agent gets the tools. Create an agent with `PASEO_WARDER=off` to opt it out; its subagents are then never pinged either. With scope `opt-in`, only agents created with `PASEO_WARDER=on` get the tools.
 
+## The /warder command
+
+Type these in an agent's composer. Nothing is sent to the model as a prompt.
+
+- `/warder <task> [--interval <minutes>]` puts the current agent under watch, registered by the user, with the same idle rule as any task (pinged 1 min after it stops without finishing). The agent is told it is watched and must call `warder_update` and `warder_done`. The interval is the hang check, capped by the max interval setting.
+- `/warder stop` (or `done`) ends the watch on the current agent.
+- `/warder` shows the current watch status.
+- `/warder supervise` is for coordinators. It watches the agent's direct child agents, including ones created later, and never applies the idle rule to the coordinator itself. The coordinator is pinged only when a child needs it and it has not reacted within the react delay (default 5 min): a child finished or stopped its turn, waits on a permission request, or hangs with no activity past the hang check. Prompting the child, answering its permission or archiving it counts as reacting. A ping lists the children and why, and each event is reported once. `/warder supervise stop` ends it.
+
+The result of each command appears as a note in the agent's timeline. The screen shows supervision as "supervising N agents · M need attention".
+
 ## Settings
 
 - Scope, tick interval (default 1 min), idle grace period and the global gap between prompts.
+- How long a supervising coordinator has to react to a child before it is pinged.
 - Backoff factor and its cap, when to notify the parent, and when to give up.
 - The ping and parent notice templates (`{{task}}`, `{{minutes}}`, `{{title}}`, `{{agentId}}`, `{{pings}}`).
 - Announced-work detection, off by default: registers a task automatically when an agent ends a turn saying it will keep watching or check back later.
