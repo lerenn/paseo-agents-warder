@@ -34,6 +34,8 @@ export const settingsSchema = z.object({
   notifyParentAfterPings: z.number().int().min(1).default(3),
   /** Stop pinging a task after this many unanswered pings (the parent is notified). */
   maxUnansweredPings: z.number().int().min(1).default(6),
+  /** `/warder supervise`: how long a coordinator has to react to a child that needs it before it is pinged. */
+  superviseReactMinutes: z.number().min(1).default(5),
   pingTemplate: z.string().default(DEFAULT_PING_TEMPLATE),
   idlePingTemplate: z.string().default(DEFAULT_IDLE_PING_TEMPLATE),
   parentTemplate: z.string().default(DEFAULT_PARENT_TEMPLATE),

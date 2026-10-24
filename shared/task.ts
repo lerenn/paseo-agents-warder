@@ -28,7 +28,7 @@ export const taskViewSchema = z.object({
   idleSince: z.number().nullable(),
   until: z.number().nullable(),
   registeredBy: z.string(),
-  source: z.enum(["agent", "parent", "announced-work"]),
+  source: z.enum(["agent", "parent", "announced-work", "user"]),
   status: taskStatusSchema,
   createdAt: z.number(),
   lastActivityAt: z.number(),
@@ -39,3 +39,16 @@ export const taskViewSchema = z.object({
   result: z.string().nullable(),
 });
 export type TaskView = z.infer<typeof taskViewSchema>;
+
+export const supervisionViewSchema = z.object({
+  agentId: z.string(),
+  agentTitle: z.string().nullable(),
+  workspaceId: z.string().nullable(),
+  projectName: z.string().nullable(),
+  workspaceName: z.string().nullable(),
+  createdAt: z.number(),
+  children: z.number(),
+  needAttention: z.number(),
+  attention: z.array(z.object({ agentId: z.string(), title: z.string().nullable(), reason: z.string(), since: z.number() })),
+});
+export type SupervisionView = z.infer<typeof supervisionViewSchema>;
